@@ -187,9 +187,7 @@ cam_ccbq_pending_ccb_count(struct cam_ccbq *ccbq)
 static __inline void
 cam_ccbq_take_opening(struct cam_ccbq *ccbq)
 {
-	printk("chkpnt#4\n");
 	ccbq->allocated++;
-	printk("chkpnt#\n");
 }
 
 static __inline void

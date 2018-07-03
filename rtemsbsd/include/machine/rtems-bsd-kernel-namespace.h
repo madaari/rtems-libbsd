@@ -5029,9 +5029,6 @@
 #define	X_ip6_mrouter_get _bsd_X_ip6_mrouter_get
 #define	X_ip6_mrouter_set _bsd_X_ip6_mrouter_set
 #define	X_mrt6_ioctl _bsd_X_mrt6_ioctl
-#define	xpt_bus_deregister _bsd_xpt_bus_deregister
-#define	xpt_bus_register _bsd_xpt_bus_register
-#define	xpt_done _bsd_xpt_done
 #define	z_alloc _bsd_z_alloc
 #define	zd1211b_firmware _bsd_zd1211b_firmware
 #define	zd1211_firmware _bsd_zd1211_firmware
