@@ -34,6 +34,7 @@
 
 #ifdef _KERNEL
 #include <sys/cdefs.h>
+#include <cam/cam_ccb.h>
 #endif
 
 /* Forward Declarations */
@@ -140,6 +141,18 @@ void			xpt_copy_path(struct cam_path *new_path,
 				      struct cam_path *path);
 
 void			xpt_release_path(struct cam_path *path);
+
+const char *		xpt_action_name(uint32_t action);
+
+static inline void
+xpt_path_inq(struct ccb_pathinq *cpi, struct cam_path *path)
+{
+
+	bzero(cpi, sizeof(*cpi));
+	xpt_setup_ccb(&cpi->ccb_h, path, CAM_PRIORITY_NORMAL);
+	cpi->ccb_h.func_code = XPT_PATH_INQ;
+	xpt_action((union ccb *)cpi);
+}
 
 #endif /* _KERNEL */
 

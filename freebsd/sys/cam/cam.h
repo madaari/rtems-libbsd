@@ -33,7 +33,7 @@
 
 #ifdef _KERNEL
 #ifndef __rtems__
-#include <opt_cam.h>
+#include <rtems/bsd/local/opt_cam.h>
 #else /* __rtems__ */
 #include <rtems/bsd/local/opt_cam.h>
 #endif /* __rtems__ */

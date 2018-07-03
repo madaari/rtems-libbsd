@@ -699,6 +699,45 @@ class mmc_ti(builder.Module):
         )
 
 #
+# MMCCAM
+#
+class mmccam(builder.Module):
+
+   def __init__(self, manager):
+       super(mmccam, self).__init__(manager, type(self).__name__)
+
+   def generate(self):
+       mm = self.manager
+       self.addKernelSpaceHeaderFiles(
+           [
+               'sys/cam/cam.h',
+               'sys/cam/cam_ccb.h',
+               'sys/cam/cam_periph.h',
+               'sys/cam/cam_xpt.h',
+               'sys/cam/cam_xpt_internal.h',
+               'sys/cam/mmc/mmc.h',
+               'sys/cam/mmc/mmc_all.h',
+               'sys/cam/mmc/mmc_bus.h',
+               'sys/dev/mmc/bridge.h',
+               'sys/dev/mmc/mmcbrvar.h',
+               'sys/dev/mmc/mmcreg.h',
+               'sys/dev/sdhci/sdhci.h',
+           ]
+       )
+       self.addKernelSpaceSourceFiles(
+           [
+               'sys/arm/ti/ti_sdhci.c',
+               'sys/cam/cam_periph.c',
+               'sys/cam/cam_xpt.c',
+               'sys/cam/mmc/mmc_da.c',
+               'sys/cam/mmc/mmc_xpt.c',
+               'sys/dev/sdhci/fsl_sdhci.c',
+               'sys/dev/sdhci/sdhci.c',
+           ],
+           mm.generator['source']()
+       )
+
+#
 # Input
 #
 class dev_input(builder.Module):
@@ -4791,6 +4830,7 @@ def load(mm):
     mm.addModule(tty(mm))
     mm.addModule(mmc(mm))
     mm.addModule(mmc_ti(mm))
+    mm.addModule(mmccam(mm))
     mm.addModule(dev_input(mm))
     mm.addModule(evdev(mm))
 

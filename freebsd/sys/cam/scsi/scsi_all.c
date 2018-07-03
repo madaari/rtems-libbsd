@@ -38,7 +38,7 @@ __FBSDID("$FreeBSD$");
 
 #ifdef _KERNEL
 #ifndef __rtems__
-#include <opt_scsi.h>
+#include <rtems/bsd/local/opt_scsi.h>
 #else /* __rtems__ */
 #include <rtems/bsd/local/opt_scsi.h>
 #endif /* __rtems__ */

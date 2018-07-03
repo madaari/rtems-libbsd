@@ -28,6 +28,8 @@
 #ifndef	__SDHCI_H__
 #define	__SDHCI_H__
 
+#include <rtems/bsd/local/opt_mmccam.h>
+
 #define	DMA_BLOCK_SIZE	4096
 #define	DMA_BOUNDARY	0	/* DMA reload every 4K */
 
@@ -87,6 +89,8 @@
 #define	SDHCI_QUIRK_CAPS_BIT63_FOR_MMC_HS400		(1 << 26)
 /* Controller support for SDHCI_CTRL2_PRESET_VALUE is broken. */
 #define	SDHCI_QUIRK_PRESET_VALUE_BROKEN			(1 << 27)
+/* Controller does not support or the support for ACMD12 is broken. */
+#define	SDHCI_QUIRK_BROKEN_AUTO_STOP			(1 << 28)
 
 /*
  * Controller registers
@@ -365,6 +369,15 @@ struct sdhci_slot {
 #define	SDHCI_USE_DMA		4	/* Use DMA for this req. */
 #define	PLATFORM_DATA_STARTED	8	/* Data xfer is handled by platform */
 	struct mtx	mtx;		/* Slot mutex */
+
+#ifdef MMCCAM
+	/* CAM stuff */
+	union ccb	*ccb;
+	struct cam_devq		*devq;
+	struct cam_sim		*sim;
+	struct mtx		sim_mtx;
+	u_char			card_present; /* XXX Maybe derive this from elsewhere? */
+#endif
 };
 
 int sdhci_generic_read_ivar(device_t bus, device_t child, int which,
