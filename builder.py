@@ -326,7 +326,7 @@ class Converter(object):
             else:
                 print("diff -u %s %s" % (src, dst))
                 for l in diff:
-                    print(l)
+                    print(l.encode('utf'))
 
 class NoConverter(Converter):
     def convert(self, src, dst, hasSource = True, sourceFilter = None):
