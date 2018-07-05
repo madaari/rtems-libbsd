@@ -722,6 +722,8 @@ class mmccam(builder.Module):
                'sys/dev/mmc/mmcbrvar.h',
                'sys/dev/mmc/mmcreg.h',
                'sys/dev/sdhci/sdhci.h',
+               'sys/arm/include/md_var.h',
+               'sys/sys/devicestat.h',
            ]
        )
        self.addKernelSpaceSourceFiles(

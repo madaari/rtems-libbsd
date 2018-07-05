@@ -57,6 +57,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/cons.h>
 #include <sys/proc.h>
 #include <sys/reboot.h>
+#ifdef __rtems__
+#include <geom/geom.h>
+#endif
 #include <geom/geom_disk.h>
 #include <machine/_inttypes.h>  /* for PRIu64 */
 #endif /* _KERNEL */
@@ -80,7 +83,7 @@ __FBSDID("$FreeBSD$");
 
 #include <cam/mmc/mmc_all.h>
 
-#include <machine/md_var.h>	/* geometry translation */
+#include "md_var.h"	/* geometry translation */
 
 #ifdef _KERNEL
 
@@ -107,7 +110,7 @@ struct sdda_softc;
 
 struct sdda_part {
 	struct disk *disk;
-	struct bio_queue_head bio_queue;
+//	struct bio_queue_head bio_queue;
 	sdda_flags flags;
 	struct sdda_softc *sc;
 	u_int cnt;
@@ -154,7 +157,7 @@ struct sdda_softc {
 
 #define ccb_bp		ppriv_ptr1
 
-static	disk_strategy_t	sddastrategy;
+//static	disk_strategy_t	sddastrategy;
 static	periph_init_t	sddainit;
 static	void		sddaasync(void *callback_arg, u_int32_t code,
 				struct cam_path *path, void *arg);
