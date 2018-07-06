@@ -733,7 +733,6 @@ class mmccam(builder.Module):
                'sys/cam/cam_xpt.c',
                'sys/cam/mmc/mmc_da.c',
                'sys/cam/mmc/mmc_xpt.c',
-               'sys/dev/sdhci/fsl_sdhci.c',
                'sys/dev/sdhci/sdhci.c',
            ],
            mm.generator['source']()
