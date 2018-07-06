@@ -100,5 +100,7 @@ struct mmc_params {
  * settings should also take all cards into account.
  */
 #define MMC_PROPOSED_RCA    2
-
+#ifdef __rtems__
+#define PRIBIO 60
+#endif
 #endif

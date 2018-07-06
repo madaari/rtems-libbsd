@@ -57,9 +57,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/cons.h>
 #include <sys/proc.h>
 #include <sys/reboot.h>
-#ifdef __rtems__
-#include <geom/geom.h>
-#endif
 #include <geom/geom_disk.h>
 #include <machine/_inttypes.h>  /* for PRIu64 */
 #endif /* _KERNEL */
@@ -80,8 +77,14 @@ __FBSDID("$FreeBSD$");
 #include <cam/cam_xpt_internal.h>
 #include <cam/cam_debug.h>
 
-
 #include <cam/mmc/mmc_all.h>
+#ifdef __rtems__
+#include <machine/rtems-bsd-support.h>
+#include <rtems/bdbuf.h>
+#include <rtems/diskdevs.h>
+#include <rtems/libio.h>
+#include <rtems/media.h>
+#endif /* __rtems__ */
 
 #include "md_var.h"	/* geometry translation */
 
@@ -109,8 +112,10 @@ typedef enum {
 struct sdda_softc;
 
 struct sdda_part {
+#ifndef __rtems__
 	struct disk *disk;
-//	struct bio_queue_head bio_queue;
+	struct bio_queue_head bio_queue;
+#endif
 	sdda_flags flags;
 	struct sdda_softc *sc;
 	u_int cnt;
@@ -156,8 +161,9 @@ struct sdda_softc {
 };
 
 #define ccb_bp		ppriv_ptr1
-
-//static	disk_strategy_t	sddastrategy;
+#ifndef __rtems__
+static	disk_strategy_t	sddastrategy;
+#endif
 static	periph_init_t	sddainit;
 static	void		sddaasync(void *callback_arg, u_int32_t code,
 				struct cam_path *path, void *arg);
@@ -217,6 +223,215 @@ static const int cur_min[8] = {
 static const int cur_max[8] = {
 	1000, 5000, 10000, 25000, 35000, 45000, 800000, 200000
 };
+
+#ifdef __rtems__
+static rtems_status_code
+rtems_bsd_mmcsd_set_block_size(device_t dev, uint32_t block_size)
+{
+	rtems_status_code status_code = RTEMS_SUCCESSFUL;
+	struct mmc_command cmd;
+	struct mmc_request req;
+
+	memset(&req, 0, sizeof(req));
+	memset(&cmd, 0, sizeof(cmd));
+
+	req.cmd = &cmd;
+	cmd.opcode = MMC_SET_BLOCKLEN;
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+	cmd.arg = block_size;
+	MMCBUS_WAIT_FOR_REQUEST(device_get_parent(dev), dev,
+	    &req);
+	if (req.cmd->error != MMC_ERR_NONE) {
+		status_code = RTEMS_IO_ERROR;
+	}
+
+	return status_code;
+}
+
+static int
+rtems_bsd_mmcsd_disk_read_write(struct sdda_part *part, rtems_blkdev_request *blkreq)
+{
+/*
+	rtems_status_code status_code = RTEMS_SUCCESSFUL;
+	struct sdda_softc *sc = part->sc;
+	device_t dev = sc->dev;
+	int shift = mmc_get_high_cap(dev) ? 0 : 9;
+	int rca = get_rca(dev);
+	uint32_t buffer_count = blkreq->bufnum;
+	uint32_t transfer_bytes = blkreq->bufs[0].length;
+	uint32_t block_count = transfer_bytes / MMC_SECTOR_SIZE;
+	uint32_t opcode;
+	uint32_t data_flags;
+	uint32_t i;
+
+	if (blkreq->req == RTEMS_BLKDEV_REQ_WRITE) {
+		if (block_count > 1) {
+			opcode = MMC_WRITE_MULTIPLE_BLOCK;
+		} else {
+			opcode = MMC_WRITE_BLOCK;
+		}
+
+		data_flags = MMC_DATA_WRITE;
+	} else {
+		BSD_ASSERT(blkreq->req == RTEMS_BLKDEV_REQ_READ);
+
+		if (block_count > 1) {
+			opcode = MMC_READ_MULTIPLE_BLOCK;
+		} else {
+			opcode = MMC_READ_SINGLE_BLOCK;
+		}
+
+		data_flags = MMC_DATA_READ;
+	}
+
+	MMCSD_PART_LOCK(part);
+
+	for (i = 0; i < buffer_count; ++i) {
+		rtems_blkdev_sg_buffer *sg = &blkreq->bufs [i];
+		struct mmc_request req;
+		struct mmc_command cmd;
+		struct mmc_command stop;
+		struct mmc_data data;
+		rtems_interval timeout;
+
+		memset(&req, 0, sizeof(req));
+		memset(&cmd, 0, sizeof(cmd));
+		memset(&stop, 0, sizeof(stop));
+
+		req.cmd = &cmd;
+
+		cmd.opcode = opcode;
+		cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+		cmd.data = &data;
+		cmd.arg = sg->block << shift;
+
+		if (block_count > 1) {
+			data_flags |= MMC_DATA_MULTI;
+			stop.opcode = MMC_STOP_TRANSMISSION;
+			stop.flags = MMC_RSP_R1B | MMC_CMD_AC;
+			req.stop = &stop;
+		}
+
+		data.flags = data_flags;;
+		data.data = sg->buffer;
+		data.mrq = &req;
+		data.len = transfer_bytes;
+
+		MMCBUS_WAIT_FOR_REQUEST(device_get_parent(dev), dev,
+		    &req);
+		if (req.cmd->error != MMC_ERR_NONE) {
+			status_code = RTEMS_IO_ERROR;
+			goto error;
+		}
+
+		timeout = rtems_clock_tick_later_usec(250000);
+		while (1) {
+			struct mmc_request req2;
+			struct mmc_command cmd2;
+			uint32_t status;
+
+			memset(&req2, 0, sizeof(req2));
+			memset(&cmd2, 0, sizeof(cmd2));
+
+			req2.cmd = &cmd2;
+
+			cmd2.opcode = MMC_SEND_STATUS;
+			cmd2.arg = rca << 16;
+			cmd2.flags = MMC_RSP_R1 | MMC_CMD_AC;
+
+			MMCBUS_WAIT_FOR_REQUEST(device_get_parent(dev), dev,
+			    &req2);
+			if (req2.cmd->error != MMC_ERR_NONE) {
+				status_code = RTEMS_IO_ERROR;
+				goto error;
+			}
+
+			status = cmd2.resp[0];
+			if ((status & R1_READY_FOR_DATA) != 0
+			    && R1_CURRENT_STATE(status) != R1_STATE_PRG) {
+				break;
+			}
+
+			if (!rtems_clock_tick_before(timeout)) {
+				status_code = RTEMS_IO_ERROR;
+				goto error;
+			}
+		}
+	}
+
+error:
+
+	MMCSD_PART_UNLOCK(part);
+
+	rtems_blkdev_request_done(blkreq, status_code);
+*/
+	return 0;
+}
+
+static int
+rtems_bsd_mmcsd_disk_ioctl(rtems_disk_device *dd, uint32_t req, void *arg)
+{
+/*
+
+	if (req == RTEMS_BLKIO_REQUEST) {
+		struct mmcsd_part *part = rtems_disk_get_driver_data(dd);
+		rtems_blkdev_request *blkreq = arg;
+
+		return rtems_bsd_mmcsd_disk_read_write(part, blkreq);
+	} else if (req == RTEMS_BLKIO_CAPABILITIES) {
+		*(uint32_t *) arg = RTEMS_BLKDEV_CAP_MULTISECTOR_CONT;
+		return 0;
+	} else {
+		return rtems_blkdev_ioctl(dd, req, arg);
+	}
+*/
+}
+
+static rtems_status_code
+rtems_bsd_mmcsd_attach_worker(rtems_media_state state, const char *src, char **dest, void *arg)
+{
+/*
+	rtems_status_code status_code = RTEMS_SUCCESSFUL;
+	struct mmcsd_part *part = arg;
+	char *disk = NULL;
+
+	if (state == RTEMS_MEDIA_STATE_READY) {
+		struct mmcsd_softc *sc = part->sc;
+		device_t dev = sc->dev;
+		uint32_t block_count = mmc_get_media_size(dev);
+		uint32_t block_size = MMC_SECTOR_SIZE;
+
+		disk = rtems_media_create_path("/dev", src, device_get_unit(dev));
+		if (disk == NULL) {
+			printf("OOPS: create path failed\n");
+			goto error;
+		}
+
+		MMCBUS_ACQUIRE_BUS(device_get_parent(dev), dev);
+
+		status_code = rtems_bsd_mmcsd_set_block_size(dev, block_size);
+		if (status_code != RTEMS_SUCCESSFUL) {
+			printf("OOPS: set block size failed\n");
+			goto error;
+		}
+
+		status_code = rtems_blkdev_create(disk, block_size,
+		    block_count, rtems_bsd_mmcsd_disk_ioctl, part);
+		if (status_code != RTEMS_SUCCESSFUL) {
+			goto error;
+		}
+
+		*dest = strdup(disk, M_RTEMS_HEAP);
+	}
+
+	return RTEMS_SUCCESSFUL;
+
+error:
+	free(disk, M_RTEMS_HEAP);
+*/
+	return RTEMS_IO_ERROR;
+}
+#endif /* __rtems__ */
 
 static uint16_t
 get_rca(struct cam_periph *periph) {
@@ -414,6 +629,7 @@ mmc_format_card_id_string(struct sdda_softc *sc, struct mmc_params *mmcp)
                  sc->cid.mid, oidstr);
 }
 
+#ifndef __rtems__
 static int
 sddaopen(struct disk *dp)
 {
@@ -467,12 +683,14 @@ sddaclose(struct disk *dp)
 	cam_periph_release(periph);
 	return (0);
 }
+#endif /* __rtems__ */
 
 static void
 sddaschedule(struct cam_periph *periph)
 {
 	struct sdda_softc *softc = (struct sdda_softc *)periph->softc;
 	struct sdda_part *part;
+#ifndef __rtems__
 	struct bio *bp;
 	int i;
 
@@ -489,6 +707,9 @@ sddaschedule(struct cam_periph *periph)
 	if (bp != NULL) {
 		xpt_schedule(periph, CAM_PRIORITY_NORMAL);
 	}
+#else /* __rtems__ */
+    xpt_schedule(periph, CAM_PRIORITY_NORMAL);
+#endif /* __rtems__ */
 }
 
 /*
@@ -496,6 +717,7 @@ sddaschedule(struct cam_periph *periph)
  * can understand.  The transfer is described by a buf and will include
  * only one physical transfer.
  */
+#ifndef __rtems__
 static void
 sddastrategy(struct bio *bp)
 {
@@ -533,7 +755,7 @@ sddastrategy(struct bio *bp)
 
 	return;
 }
-
+#endif
 static void
 sddainit(void)
 {
@@ -555,6 +777,7 @@ sddainit(void)
  * Callback from GEOM, called when it has finished cleaning up its
  * resources.
  */
+#ifndef __rtems__
 static void
 sddadiskgonecb(struct disk *dp)
 {
@@ -567,7 +790,7 @@ sddadiskgonecb(struct disk *dp)
 
 	cam_periph_release(periph);
 }
-
+#endif
 static void
 sddaoninvalidate(struct cam_periph *periph)
 {
@@ -589,12 +812,14 @@ sddaoninvalidate(struct cam_periph *periph)
 	 *     with XPT_ABORT_CCB.
 	 */
         CAM_DEBUG(periph->path, CAM_DEBUG_TRACE, ("bioq_flush start\n"));
+#ifndef __rtems__
 	for (int i = 0; i < MMC_PART_MAX; i++) {
 		if ((part = softc->part[i]) != NULL) {
 			bioq_flush(&part->bio_queue, NULL, ENXIO);
 			disk_gone(part->disk);
 		}
 	}
+#endif
         CAM_DEBUG(periph->path, CAM_DEBUG_TRACE, ("bioq_flush end\n"));
 
 }
@@ -613,7 +838,10 @@ sddacleanup(struct cam_periph *periph)
 
 	for (i = 0; i < MMC_PART_MAX; i++) {
 		if ((part = softc->part[i]) != NULL) {
+/* TODO: Add RTEMS speciifc disk cleanup routine */
+#ifndef __rtems__
 			disk_destroy(part->disk);
+#endif
 			free(part, M_DEVBUF);
 			softc->part[i] = NULL;
 		}
@@ -690,12 +918,14 @@ sddaasync(void *callback_arg, u_int32_t code,
 			struct sdda_part *part;
 
 			softc = periph->softc;
+#ifndef __rtems__
 			for (i = 0; i < MMC_PART_MAX; i++) {
 				if ((part = softc->part[i]) != NULL) {
 					disk_attr_changed(part->disk, "GEOM::physpath",
 					    M_NOWAIT);
 				}
 			}
+#endif
 		}
 		break;
 	}
@@ -706,7 +936,7 @@ sddaasync(void *callback_arg, u_int32_t code,
 	}
 }
 
-
+#ifndef __rtems__
 static int
 sddagetattr(struct bio *bp)
 {
@@ -726,6 +956,7 @@ sddagetattr(struct bio *bp)
 		bp->bio_completed = bp->bio_length;
 	return (ret);
 }
+#endif /* __rtems__ */
 
 static cam_status
 sddaregister(struct cam_periph *periph, void *arg)
@@ -1454,8 +1685,9 @@ sdda_add_part(struct cam_periph *periph, u_int type, const char *name,
 		    ("Don't know what to do with RPMB partitions yet\n"));
 		return;
 	}
-
+#ifndef __rtems__
 	bioq_init(&part->bio_queue);
+#endif /* __rtems__ */
 
 	bzero(&cpi, sizeof(cpi));
 	xpt_setup_ccb(&cpi.ccb_h, periph->path, CAM_PRIORITY_NONE);
@@ -1468,6 +1700,7 @@ sdda_add_part(struct cam_periph *periph, u_int type, const char *name,
 	(void)cam_periph_hold(periph, PRIBIO);
 	cam_periph_unlock(periph);
 
+#ifndef __rtems__
 	part->disk = disk_alloc();
 	part->disk->d_rotation_rate = DISK_RR_NON_ROTATING;
 	part->disk->d_devstat = devstat_new_entry(part->name,
@@ -1506,6 +1739,7 @@ sdda_add_part(struct cam_periph *periph, u_int type, const char *name,
 	part->disk->d_stripesize = 0;
 	part->disk->d_fwsectors = 0;
 	part->disk->d_fwheads = 0;
+#endif /* __rtems__ */
 
 	/*
 	 * Acquire a reference to the periph before we register with GEOM.
@@ -1518,7 +1752,14 @@ sdda_add_part(struct cam_periph *periph, u_int type, const char *name,
 		cam_periph_lock(periph);
 		return;
 	}
+#ifdef __rtems__
+	rtems_status_code status_code = rtems_media_server_disk_attach(
+        part->name, rtems_bsd_mmcsd_attach_worker, part);
+    BSD_ASSERT(status_code == RTEMS_SUCCESSFUL);
+#else /* __rtems__ */
 	disk_create(part->disk, DISK_VERSION);
+#endif /*__rtems__ */
+
 	cam_periph_lock(periph);
 	cam_periph_unhold(periph);
 }
@@ -1685,7 +1926,9 @@ sdda_init_switch_part(struct cam_periph *periph, union ccb *start_ccb, u_int par
 static void
 sddastart(struct cam_periph *periph, union ccb *start_ccb)
 {
+#ifndef __rtems__
 	struct bio *bp;
+#endif
 	struct sdda_softc *softc = (struct sdda_softc *)periph->softc;
 	struct sdda_part *part;
 	struct mmc_params *mmcp = &periph->path->device->mmc_ident_data;
@@ -1698,9 +1941,9 @@ sddastart(struct cam_periph *periph, union ccb *start_ccb)
 		xpt_release_ccb(start_ccb);
 		return;
 	}
-
 	/* Find partition that has outstanding commands.  Prefer current partition. */
 	part = softc->part[softc->part_curr];
+#ifndef __rtems__
 	bp = bioq_first(&part->bio_queue);
 	if (bp == NULL) {
 		for (part_index = 0; part_index < MMC_PART_MAX; part_index++) {
@@ -1713,6 +1956,8 @@ sddastart(struct cam_periph *periph, union ccb *start_ccb)
 		xpt_release_ccb(start_ccb);
 		return;
 	}
+#endif /* __rtems__ */
+
 	if (part_index != softc->part_curr) {
 		CAM_DEBUG(periph->path, CAM_DEBUG_PERIPH,
 		    ("Partition  %d -> %d\n", softc->part_curr, part_index));
@@ -1731,7 +1976,7 @@ sddastart(struct cam_periph *periph, union ccb *start_ccb)
 		sdda_init_switch_part(periph, start_ccb, part_index);
 		return;
 	}
-
+#ifndef __rtems__
 	bioq_remove(&part->bio_queue, bp);
 
 	switch (bp->bio_cmd) {
@@ -1800,6 +2045,7 @@ sddastart(struct cam_periph *periph, union ccb *start_ccb)
 		break;
 	}
 	start_ccb->ccb_h.ccb_bp = bp;
+#endif /* __rtems__ */
 	softc->outstanding_cmds++;
 	softc->refcount++;
 	cam_periph_unlock(periph);
@@ -1822,8 +2068,9 @@ sddadone(struct cam_periph *periph, union ccb *done_ccb)
 
 	softc = (struct sdda_softc *)periph->softc;
 	mmcio = &done_ccb->mmcio;
+#ifndef __rtems__
 	path = done_ccb->ccb_h.path;
-
+#endif
 	CAM_DEBUG(path, CAM_DEBUG_TRACE, ("sddadone\n"));
 //        cam_periph_lock(periph);
 	if ((done_ccb->ccb_h.status & CAM_STATUS_MASK) != CAM_REQ_CMP) {
@@ -1872,7 +2119,7 @@ sddadone(struct cam_periph *periph, union ccb *done_ccb)
 		xpt_schedule(periph, CAM_PRIORITY_NORMAL);
 		return;
 	}
-
+#ifndef __rtems__
 	bp = (struct bio *)done_ccb->ccb_h.ccb_bp;
 	bp->bio_error = error;
 	if (error != 0) {
@@ -1884,6 +2131,7 @@ sddadone(struct cam_periph *periph, union ccb *done_ccb)
 		if (bp->bio_resid > 0)
 			bp->bio_flags |= BIO_ERROR;
 	}
+#endif
 
 	softc->outstanding_cmds--;
 	xpt_release_ccb(done_ccb);
@@ -1892,7 +2140,9 @@ sddadone(struct cam_periph *periph, union ccb *done_ccb)
 	 */
 	KASSERT(softc->refcount >= 1, ("sddadone softc %p refcount %d", softc, softc->refcount));
 	softc->refcount--;
+#ifdef __rtems__
 	biodone(bp);
+#endif
 }
 
 static int
