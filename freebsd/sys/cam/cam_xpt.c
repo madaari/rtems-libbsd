@@ -68,10 +68,17 @@ __FBSDID("$FreeBSD$");
 #include <cam/cam_compat.h>
 
 #include <cam/scsi/scsi_all.h>
+#ifndef __rtems__
 #include <cam/scsi/scsi_message.h>
 #include <cam/scsi/scsi_pass.h>
+#endif
 
+#ifndef __rtems__
 #include <machine/md_var.h>	/* geometry translation */
+#else
+#include "md_var.h"
+#endif
+
 #include <machine/stdarg.h>	/* for xpt_print below */
 
 #include <rtems/bsd/local/opt_cam.h>
@@ -329,7 +336,7 @@ static xpt_busfunc_t	xptsetasyncbusfunc;
 static cam_status	xptregister(struct cam_periph *periph,
 				    void *arg);
 static __inline int device_is_queued(struct cam_ed *device);
-
+#ifndef __rtems__
 static __inline int
 xpt_schedule_devq(struct cam_devq *devq, struct cam_ed *dev)
 {
@@ -359,7 +366,7 @@ device_is_queued(struct cam_ed *device)
 {
 	return (device->devq_entry.index != CAM_UNQUEUED_INDEX);
 }
-
+#endif
 static void
 xpt_periph_init()
 {
@@ -410,7 +417,7 @@ xptioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread *td
 	}
 	return (error);
 }
-
+#ifndef __rtems__
 static int
 xptdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread *td)
 {
@@ -755,7 +762,7 @@ xptdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread *
 
 	return(error);
 }
-
+#endif
 static int
 cam_module_event_handler(module_t mod, int what, void *arg)
 {
@@ -4419,6 +4426,7 @@ xpt_release_devq(struct cam_path *path, u_int count, int run_queue)
 	mtx_unlock(&devq->send_mtx);
 }
 
+#ifndef __rtems__
 static int
 xpt_release_devq_device(struct cam_ed *dev, u_int count, int run_queue)
 {
@@ -4459,7 +4467,7 @@ xpt_release_devq_device(struct cam_ed *dev, u_int count, int run_queue)
 		run_queue = 0;
 	return (run_queue);
 }
-
+#endif
 void
 xpt_release_simq(struct cam_sim *sim, int run_queue)
 {

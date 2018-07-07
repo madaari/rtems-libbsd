@@ -57,8 +57,10 @@ __FBSDID("$FreeBSD$");
 #include <cam/cam_sim.h>
 
 #include <cam/scsi/scsi_all.h>
+#ifndef __rtems__
 #include <cam/scsi/scsi_message.h>
 #include <cam/scsi/scsi_pass.h>
+#endif /* __rtems__ */
 
 static	u_int		camperiphnextunit(struct periph_driver *p_drv,
 					  u_int newunit, int wired,
