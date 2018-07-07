@@ -714,6 +714,7 @@ class mmccam(builder.Module):
                'sys/cam/cam_ccb.h',
                'sys/cam/cam_periph.h',
                'sys/cam/cam_xpt.h',
+               'sys/cam/cam_compat.h',
                'sys/cam/cam_xpt_internal.h',
                'sys/cam/mmc/mmc.h',
                'sys/cam/mmc/mmc_all.h',
@@ -729,7 +730,6 @@ class mmccam(builder.Module):
        self.addKernelSpaceSourceFiles(
            [
                'sys/arm/ti/ti_sdhci.c',
-               'sys/cam/cam_periph.c',
                'sys/cam/cam_xpt.c',
                'sys/cam/mmc/mmc_da.c',
                'sys/cam/mmc/mmc_xpt.c',
