@@ -564,7 +564,9 @@ sdhci_card_task(void *arg, int pending __unused)
 			union ccb *ccb;
 			uint32_t pathid;
 			pathid = cam_sim_path(slot->sim);
+			printf("**Calling cam_sim_ccb_nowait and pathid is %d \n",pathid);
 			ccb = xpt_alloc_ccb_nowait();
+			printf("**Calling xpt_alloc_ccb_nowait and result of ccb==NULL is %d\n",(ccb == NULL));
 			if (ccb == NULL) {
 				slot_printf(slot, "Unable to alloc CCB for rescan\n");
 				SDHCI_UNLOCK(slot);

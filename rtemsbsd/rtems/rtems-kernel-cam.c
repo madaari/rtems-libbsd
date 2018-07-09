@@ -502,3 +502,54 @@ xpt_bus_deregister(path_id_t pathid)
 
 	return CAM_REQ_CMP;
 }
+
+u_int32_t
+camq_resize(struct camq *queue, int new_size)
+{
+    /* Rest every thing is skipped */
+	return (CAM_REQ_CMP);
+}
+
+u_int32_t
+cam_devq_resize(struct cam_devq *camq, int devices)
+{
+	u_int32_t retval;
+
+	retval = camq_resize(&camq->send_queue, devices);
+	return (retval);
+}
+
+static MALLOC_DEFINE(M_CAMQ, "CAM queue", "CAM queue buffers");
+int
+camq_init(struct camq *camq, int size)
+{
+	bzero(camq, sizeof(*camq));
+	camq->array_size = size;
+	if (camq->array_size != 0) {
+		camq->queue_array = (cam_pinfo**)malloc(size*sizeof(cam_pinfo*),
+							M_CAMQ, M_NOWAIT);
+		if (camq->queue_array == NULL) {
+			printf("camq_init: - cannot malloc array!\n");
+			return (1);
+		}
+		/*
+		 * Heap algorithms like everything numbered from 1, so
+		 * offset our pointer into the heap array by one element.
+		 */
+		camq->queue_array--;
+	}
+	return (0);
+}
+
+
+int
+cam_ccbq_init(struct cam_ccbq *ccbq, int openings)
+{
+	bzero(ccbq, sizeof(*ccbq));
+	if (camq_init(&ccbq->queue,
+	    imax(64, 1 << fls(openings + openings / 2))) != 0)
+		return (1);
+	ccbq->total_openings = openings;
+	ccbq->dev_openings = openings;
+	return (0);
+}

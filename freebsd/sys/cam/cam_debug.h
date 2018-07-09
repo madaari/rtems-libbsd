@@ -44,7 +44,7 @@ typedef enum {
 	CAM_DEBUG_PROBE		= 0x40  /* print out probe actions */
 } cam_debug_flags;
 
-#if defined(_KERNEL) && !defined(__rtems__)
+#if defined(_KERNEL) && defined(__rtems__)
 
 #ifndef CAM_DEBUG_FLAGS
 #define CAM_DEBUG_FLAGS		CAM_DEBUG_NONE

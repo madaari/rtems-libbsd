@@ -1,0 +1,6 @@
+#define CAM_DEBUG_COMPILE 1
+#define CAM_DEBUG_DELAY 1
+#define CAM_DEBUG_BUS 1
+#define CAM_DEBUG_TARGET 1
+#define CAM_DEBUG_LUN 1
+#define CAM_DEBUG_FLAGS 1

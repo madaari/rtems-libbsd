@@ -1,4 +1,4 @@
-/*-
+/* EMPTY *//*-
  * Copyright 2009 Scott Long
  * All rights reserved.
  *
@@ -97,9 +97,7 @@ struct cam_ed {
 	struct	cam_et	 *target;
 	struct	cam_sim  *sim;
 	lun_id_t	 lun_id;
-#ifndef __rtems__
 	struct	cam_ccbq ccbq;		/* Queue of pending ccbs */
-#endif
 	struct	async_list asyncs;	/* Async callback info for this B/T/L */
 	struct	periph_list periphs;	/* All attached devices */
 	u_int	generation;		/* Generation number */
