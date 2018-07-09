@@ -210,9 +210,9 @@ static struct periph_driver xpt_driver =
 	TAILQ_HEAD_INITIALIZER(xpt_driver.units), /* generation */ 0,
 	CAM_PERIPH_DRV_EARLY
 };
-#ifndef __rtems__
+
 PERIPHDRIVER_DECLARE(xpt, xpt_driver);
-#endif /* __rtems__ */
+
 static d_open_t xptopen;
 static d_close_t xptclose;
 static d_ioctl_t xptioctl;
@@ -410,7 +410,7 @@ xptclose(struct cdev *dev, int flag, int fmt, struct thread *td)
  * accessing other devices and SIMs, so the right thing to do is to grab
  * the appropriate SIM lock once the bus/SIM is located.
  */
-#ifndef __rtems__
+
 static int
 xptioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread *td)
 {
@@ -766,7 +766,6 @@ xptdoioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag, struct thread *
 
 	return(error);
 }
-#endif
 
 static int
 cam_module_event_handler(module_t mod, int what, void *arg)
@@ -900,7 +899,7 @@ xpt_rescan(union ccb *ccb)
 	wakeup(&xsoftc.ccb_scanq);
 	xpt_unlock_buses();
 }
-#ifndef __rtems__
+
 /* Functions accessed by the peripheral drivers */
 static int
 xpt_init(void *dummy)
@@ -1014,7 +1013,7 @@ xpt_init(void *dummy)
 
 	return (0);
 }
-#endif /* __rtems__ */
+
 static cam_status
 xptregister(struct cam_periph *periph, void *arg)
 {
@@ -3416,7 +3415,7 @@ xpt_run_devq(struct cam_devq *devq)
 	}
 	devq->send_queue.qfrozen_cnt--;
 }
-
+#endif /* __rtems__ */
 /*
  * This function merges stuff from the slave ccb into the master ccb, while
  * keeping important fields in the master ccb constant.
@@ -3436,7 +3435,7 @@ xpt_merge_ccb(union ccb *master_ccb, union ccb *slave_ccb)
 	bcopy(&(&slave_ccb->ccb_h)[1], &(&master_ccb->ccb_h)[1],
 	      sizeof(union ccb) - sizeof(struct ccb_hdr));
 }
-#endif /* __rtems__ */
+
 void
 xpt_setup_ccb_flags(struct ccb_hdr *ccb_h, struct cam_path *path,
 		    u_int32_t priority, u_int32_t flags)
