@@ -245,7 +245,7 @@ static moduledata_t cam_moduledata = {
 	NULL
 };
 
-static int	xpt_init(void *);
+static int xpt_init(void *);
 
 DECLARE_MODULE(cam, cam_moduledata, SI_SUB_CONFIGURE, SI_ORDER_SECOND);
 MODULE_VERSION(cam, 1);
@@ -774,10 +774,8 @@ cam_module_event_handler(module_t mod, int what, void *arg)
 
 	switch (what) {
 	case MOD_LOAD:
-#ifndef __rtems__
 		if ((error = xpt_init(NULL)) != 0)
 			return (error);
-#endif /* __rtems__ */
 		break;
 	case MOD_UNLOAD:
 		return EBUSY;
@@ -993,6 +991,7 @@ xpt_init(void *dummy)
 		       "- failing attach\n");
 		return (ENOMEM);
 	}
+#ifndef __rtems__
 	/*
 	 * Register a callback for when interrupts are enabled.
 	 */
@@ -1010,7 +1009,7 @@ xpt_init(void *dummy)
 		printf("xpt_init: config_intrhook_establish failed "
 		       "- failing attach\n");
 	}
-
+#endif
 	return (0);
 }
 
@@ -5405,17 +5404,16 @@ xpt_done_td(void *arg)
 		}
 		STAILQ_CONCAT(&doneq, &queue->cam_doneq);
 		mtx_unlock(&queue->cam_doneq_mtx);
+    printf("**xpt_done_td -> could be errorenous!!");
 #ifndef __rtems__ 
 		THREAD_NO_SLEEPING();
-#endif
 		while ((ccb_h = STAILQ_FIRST(&doneq)) != NULL) {
 			STAILQ_REMOVE_HEAD(&doneq, sim_links.stqe);
 			xpt_done_process(ccb_h);
 		}
-#ifndef __rtems__
 		THREAD_SLEEPING_OK();
-#endif
 		mtx_lock(&queue->cam_doneq_mtx);
+#endif
 	}
 }
 

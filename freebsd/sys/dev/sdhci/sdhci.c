@@ -691,6 +691,7 @@ sdhci_card_poll(void *arg)
 int
 sdhci_init_slot(device_t dev, struct sdhci_slot *slot, int num)
 {
+
 	uint32_t caps, caps2, freq, host_caps;
 	int err;
 
