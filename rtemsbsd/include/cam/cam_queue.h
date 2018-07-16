@@ -217,7 +217,7 @@ cam_ccbq_insert_ccb(struct cam_ccbq *ccbq, union ccb *new_ccb)
 
 	camq_insert(queue, &new_ccb->ccb_h.pinfo);
 }
-#ifndef __rtems__
+
 static __inline void
 cam_ccbq_remove_ccb(struct cam_ccbq *ccbq, union ccb *ccb)
 {
@@ -287,6 +287,6 @@ cam_ccbq_release_opening(struct cam_ccbq *ccbq)
 
 	ccbq->allocated--;
 }
-#endif /* __rtems__ */
+
 #endif /* _KERNEL */
 #endif  /* _CAM_CAM_QUEUE_H */

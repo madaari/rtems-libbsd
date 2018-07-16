@@ -164,7 +164,7 @@ struct sdda_softc {
 #ifndef __rtems__
 static	disk_strategy_t	sddastrategy;
 #endif
-static	periph_init_t	sddainit;
+periph_init_t	sddainit;
 static	void		sddaasync(void *callback_arg, u_int32_t code,
 				struct cam_path *path, void *arg);
 static	periph_ctor_t	sddaregister;
@@ -756,11 +756,11 @@ sddastrategy(struct bio *bp)
 	return;
 }
 #endif
-static void
+void
 sddainit(void)
 {
 	cam_status status;
-
+    printk("sddainit called -> clap!!\n\n\n");
 	/*
 	 * Install a global async callback.  This callback will
 	 * receive async callbacks like "new device found".
@@ -2140,7 +2140,7 @@ sddadone(struct cam_periph *periph, union ccb *done_ccb)
 	 */
 	KASSERT(softc->refcount >= 1, ("sddadone softc %p refcount %d", softc, softc->refcount));
 	softc->refcount--;
-#ifdef __rtems__
+#ifndef __rtems__
 	biodone(bp);
 #endif
 }

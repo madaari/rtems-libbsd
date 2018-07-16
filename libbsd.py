@@ -734,6 +734,7 @@ class mmccam(builder.Module):
                'sys/cam/cam_periph.c',
                'sys/cam/cam_xpt.c',
                'sys/cam/cam_compat.c',
+               'sys/cam/cam_queue.c',
                'sys/cam/mmc/mmc_da.c',
                'sys/cam/mmc/mmc_xpt.c',
                'sys/dev/sdhci/sdhci.c',

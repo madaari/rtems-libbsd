@@ -72,7 +72,10 @@
 
 #define BSD_SCSI_MIN_COMMAND_SIZE 10
 
+#define CAM_PATH_ANY (u_int32_t)-1
 MALLOC_DEFINE(M_CAMSIM, "CAM SIM", "CAM SIM buffers");
+static struct mtx cam_sim_free_mtx;
+MTX_SYSINIT(cam_sim_free_init, &cam_sim_free_mtx, "CAM SIM free lock", MTX_DEF);
 
 static void
 rtems_bsd_sim_set_state(struct cam_sim *sim, enum bsd_sim_state state)
@@ -409,6 +412,8 @@ cam_sim_alloc(
 	struct cam_devq *queue
 )
 {
+    printf("**cam_sim_alloc\n");
+#ifndef MMCCAM
 	rtems_status_code sc = RTEMS_SUCCESSFUL;
 	struct cam_sim *sim = NULL;
 
@@ -435,11 +440,44 @@ cam_sim_alloc(
 	BSD_ASSERT_SC(sc);
 
 	return sim;
+#else
+    struct cam_sim *sim;
+
+	sim = (struct cam_sim *)malloc(sizeof(struct cam_sim),
+	    M_CAMSIM, M_ZERO | M_NOWAIT);
+
+	if (sim == NULL)
+		return (NULL);
+
+	sim->sim_action = sim_action;
+	sim->sim_poll = sim_poll;
+	sim->sim_name = sim_name;
+	sim->softc = softc;
+	sim->path_id = CAM_PATH_ANY;
+	sim->unit_number = unit;
+	sim->bus_id = 0;	/* set in xpt_bus_register */
+	sim->max_tagged_dev_openings = max_tagged_dev_transactions;
+	sim->max_dev_openings = max_dev_transactions;
+	sim->flags = 0;
+	sim->refcount = 1;
+	sim->devq = queue;
+	sim->mtx = mtx;
+	if (mtx == &Giant) {
+		sim->flags |= 0;
+		callout_init(&sim->callout, 0);
+	} else {
+		sim->flags |= CAM_SIM_MPSAFE;
+		callout_init(&sim->callout, 1);
+	}
+    return (sim);
+#endif
 }
 
 void
 cam_sim_free(struct cam_sim *sim, int free_devq)
 {
+    printf("**cam_sim_free\n");
+#ifndef MMCCAM
 	rtems_status_code sc = RTEMS_SUCCESSFUL;
 
 	/*
@@ -461,26 +499,61 @@ cam_sim_free(struct cam_sim *sim, int free_devq)
 
 	cv_destroy(&sim->state_changed);
 	free(sim, M_CAMSIM);
+#else
+    struct mtx *mtx = sim->mtx;
+	int error;
+
+	if (mtx) {
+		mtx_assert(mtx, MA_OWNED);
+	} else {
+		mtx = &cam_sim_free_mtx;
+		mtx_lock(mtx);
+	}
+	sim->refcount--;
+	if (sim->refcount > 0) {
+		error = msleep(sim, mtx, PRIBIO, "simfree", 0);
+		KASSERT(error == 0, ("invalid error value for msleep(9)"));
+	}
+	KASSERT(sim->refcount == 0, ("sim->refcount == 0"));
+	if (sim->mtx == NULL)
+		mtx_unlock(mtx);
+
+	if (free_devq)
+		cam_simq_free(sim->devq);
+    free(sim, M_CAMSIM);
+#endif
 }
 
 struct cam_devq *
 cam_simq_alloc(u_int32_t max_sim_transactions)
 {
+printf("**cam_simq_alloc\n");
+#ifndef MMCCAM
 	return BSD_CAM_DEVQ_DUMMY;
+#else
+    return (cam_devq_alloc(/*size*/0, max_sim_transactions));
+#endif
 }
 
 void
 cam_simq_free(struct cam_devq *devq)
 {
+printf("**cam_simq_free\n");
+#ifndef MMCCAM
 	BSD_ASSERT(devq == BSD_CAM_DEVQ_DUMMY);
+#else
+    cam_devq_free(devq);
+#endif
 }
-
+#ifndef __rtems__
 void
 xpt_done(union ccb *done_ccb)
 {
 	(*done_ccb->ccb_h.cbfcnp)(NULL, done_ccb);
 }
+#endif
 
+#ifndef __rtems__
 int32_t
 xpt_bus_register(struct cam_sim *sim, device_t parent, u_int32_t bus)
 {
@@ -491,10 +564,12 @@ xpt_bus_register(struct cam_sim *sim, device_t parent, u_int32_t bus)
 
 	return CAM_SUCCESS;
 }
+#endif
 
 int32_t
 xpt_bus_deregister(path_id_t pathid)
 {
+    printf("**xpt_bus_deregister\n");
 	/*
 	 * We ignore this bus stuff completely.  This is easier than removing
 	 * the calls from "umass.c".
@@ -503,53 +578,44 @@ xpt_bus_deregister(path_id_t pathid)
 	return CAM_REQ_CMP;
 }
 
-u_int32_t
-camq_resize(struct camq *queue, int new_size)
+void
+cam_sim_hold(struct cam_sim *sim)
 {
-    /* Rest every thing is skipped */
-	return (CAM_REQ_CMP);
-}
-
-u_int32_t
-cam_devq_resize(struct cam_devq *camq, int devices)
-{
-	u_int32_t retval;
-
-	retval = camq_resize(&camq->send_queue, devices);
-	return (retval);
-}
-
-static MALLOC_DEFINE(M_CAMQ, "CAM queue", "CAM queue buffers");
-int
-camq_init(struct camq *camq, int size)
-{
-	bzero(camq, sizeof(*camq));
-	camq->array_size = size;
-	if (camq->array_size != 0) {
-		camq->queue_array = (cam_pinfo**)malloc(size*sizeof(cam_pinfo*),
-							M_CAMQ, M_NOWAIT);
-		if (camq->queue_array == NULL) {
-			printf("camq_init: - cannot malloc array!\n");
-			return (1);
-		}
-		/*
-		 * Heap algorithms like everything numbered from 1, so
-		 * offset our pointer into the heap array by one element.
-		 */
-		camq->queue_array--;
+	struct mtx *mtx = sim->mtx;
+    printf("**cam_sim_hold\n");
+	if (mtx) {
+		if (!mtx_owned(mtx))
+			mtx_lock(mtx);
+		else
+			mtx = NULL;
+	} else {
+		mtx = &cam_sim_free_mtx;
+		mtx_lock(mtx);
 	}
-	return (0);
+	KASSERT(sim->refcount >= 1, ("sim->refcount >= 1"));
+	sim->refcount++;
+	if (mtx)
+		mtx_unlock(mtx);
 }
 
-
-int
-cam_ccbq_init(struct cam_ccbq *ccbq, int openings)
+void
+cam_sim_release(struct cam_sim *sim)
 {
-	bzero(ccbq, sizeof(*ccbq));
-	if (camq_init(&ccbq->queue,
-	    imax(64, 1 << fls(openings + openings / 2))) != 0)
-		return (1);
-	ccbq->total_openings = openings;
-	ccbq->dev_openings = openings;
-	return (0);
+	struct mtx *mtx = sim->mtx;
+    printf("**cam_sim_release\n");
+	if (mtx) {
+		if (!mtx_owned(mtx))
+			mtx_lock(mtx);
+		else
+			mtx = NULL;
+	} else {
+		mtx = &cam_sim_free_mtx;
+		mtx_lock(mtx);
+	}
+	KASSERT(sim->refcount >= 1, ("sim->refcount >= 1"));
+	sim->refcount--;
+	if (sim->refcount == 0)
+		wakeup(sim);
+	if (mtx)
+		mtx_unlock(mtx);
 }

@@ -1,4 +1,4 @@
-/* EMPTY *//*-
+/*-
  * Copyright 2009 Scott Long
  * All rights reserved.
  *
@@ -62,7 +62,7 @@ struct xpt_xport {
 	struct xpt_xport_ops	*ops;
 };
 
-SET_DECLARE(cam_xpt_xport_set, struct xpt_xport);
+RTEMS_BSD_DECLARE_SET(cam_xpt_xport_set, struct xpt_xport);
 #define CAM_XPT_XPORT(data) 				\
 	DATA_SET(cam_xpt_xport_set, data)
 
@@ -81,10 +81,9 @@ struct xpt_proto {
 	struct xpt_proto_ops	*ops;
 };
 
-SET_DECLARE(cam_xpt_proto_set, struct xpt_proto);
+RTEMS_BSD_DECLARE_SET(cam_xpt_proto_set, struct xpt_proto);
 #define CAM_XPT_PROTO(data) 				\
 	DATA_SET(cam_xpt_proto_set, data)
-
 
 /*
  * The CAM EDT (Existing Device Table) contains the device information for

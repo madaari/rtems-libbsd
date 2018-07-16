@@ -470,6 +470,8 @@ PERIPHDRIVER_DECLARE(mmcprobe, probe_driver);
 static void
 probe_periph_init()
 {
+printk("*****probe_periph_init\n");
+sddainit();
 }
 
 static cam_status

@@ -114,7 +114,7 @@ periphdriver_register(void *data)
 	struct periph_driver *drv = (struct periph_driver *)data;
 	struct periph_driver **newdrivers, **old;
 	int ndrivers;
-
+    printf("**periphdriver_register \n");
 again:
 	ndrivers = nperiph_drivers + 2;
 	newdrivers = malloc(sizeof(*newdrivers) * ndrivers, M_CAMPERIPH,
@@ -150,7 +150,7 @@ periphdriver_unregister(void *data)
 {
 	struct periph_driver *drv = (struct periph_driver *)data;
 	int error, n;
-
+    printf("**periphdriver_unregister \n");
 	/* If driver marked as early or it is late now, deinitialize it. */
 	if (((drv->flags & CAM_PERIPH_DRV_EARLY) != 0 && initialized > 0) ||
 	    initialized > 1) {
@@ -181,7 +181,7 @@ void
 periphdriver_init(int level)
 {
 	int	i, early;
-
+    printf("**periphdriver_init \n");
 	initialized = max(initialized, level);
 	for (i = 0; periph_drivers[i] != NULL; i++) {
 		early = (periph_drivers[i]->flags & CAM_PERIPH_DRV_EARLY) ? 1 : 2;
@@ -206,7 +206,7 @@ cam_periph_alloc(periph_ctor_t *periph_ctor,
 	lun_id_t	lun_id;
 	cam_status	status;
 	u_int		init_level;
-
+    printf("**cam_periph_alloc \n");
 	init_level = 0;
 	/*
 	 * Handle Hot-Plug scenarios.  If there is already a peripheral
@@ -338,7 +338,7 @@ cam_periph_find(struct cam_path *path, char *name)
 {
 	struct periph_driver **p_drv;
 	struct cam_periph *periph;
-
+    printf("**cam_periph_find \n");
 	xpt_lock_buses();
 	for (p_drv = periph_drivers; *p_drv != NULL; p_drv++) {
 
@@ -372,7 +372,7 @@ cam_periph_list(struct cam_path *path, struct sbuf *sb)
 	struct cam_periph *periph;
 	int count;
 	int sbuf_alloc_len;
-
+    printf("**cam_periph_list \n");
 	sbuf_alloc_len = 16;
 retry:
 	sbuf_new(&local_sb, NULL, sbuf_alloc_len, SBUF_FIXEDLEN);
@@ -410,7 +410,7 @@ cam_status
 cam_periph_acquire(struct cam_periph *periph)
 {
 	cam_status status;
-
+    printf("**cam_periph_acquire     \n");
 	status = CAM_REQ_CMP_ERR;
 	if (periph == NULL)
 		return (status);
@@ -428,7 +428,7 @@ cam_periph_acquire(struct cam_periph *periph)
 void
 cam_periph_doacquire(struct cam_periph *periph)
 {
-
+    printf("**cam_periph_doacquire\n");
 	xpt_lock_buses();
 	KASSERT(periph->refcount >= 1,
 	    ("cam_periph_doacquire() with refcount == %d", periph->refcount));
@@ -439,7 +439,7 @@ cam_periph_doacquire(struct cam_periph *periph)
 void
 cam_periph_release_locked_buses(struct cam_periph *periph)
 {
-
+    printf("**cam_periph_release_locked_buses \n");
 	cam_periph_assert(periph, MA_OWNED);
 	KASSERT(periph->refcount >= 1, ("periph->refcount >= 1"));
 	if (--periph->refcount == 0)
@@ -449,7 +449,7 @@ cam_periph_release_locked_buses(struct cam_periph *periph)
 void
 cam_periph_release_locked(struct cam_periph *periph)
 {
-
+    printf("**cam_periph_release_locked \n");
 	if (periph == NULL)
 		return;
 
@@ -462,7 +462,7 @@ void
 cam_periph_release(struct cam_periph *periph)
 {
 	struct mtx *mtx;
-
+    printf("**cam_periph_release \n");
 	if (periph == NULL)
 		return;
 	
@@ -477,7 +477,7 @@ int
 cam_periph_hold(struct cam_periph *periph, int priority)
 {
 	int error;
-
+    printf("**cam_periph_hold \n");
 	/*
 	 * Increment the reference count on the peripheral
 	 * while we wait for our lock attempt to succeed
@@ -509,7 +509,7 @@ cam_periph_hold(struct cam_periph *periph, int priority)
 void
 cam_periph_unhold(struct cam_periph *periph)
 {
-
+    printf("**cam_periph_unhold \n");
 	cam_periph_assert(periph, MA_OWNED);
 
 	periph->flags &= ~CAM_PERIPH_LOCKED;
@@ -537,7 +537,7 @@ camperiphnextunit(struct periph_driver *p_drv, u_int newunit, int wired,
 	char	*periph_name;
 	int	i, val, dunit, r;
 	const char *dname, *strval;
-
+    printf("**camperiphnextunit \n");
 	periph_name = p_drv->driver_name;
 	for (;;newunit++) {
 
@@ -581,6 +581,8 @@ camperiphnextunit(struct periph_driver *p_drv, u_int newunit, int wired,
 			if (newunit == dunit)
 				break;
 		}
+#else
+        r = 1;
 #endif
 		if (r != 0)
 			break;
@@ -1371,6 +1373,7 @@ camperiphscsistatuserror(union ccb *ccb, union ccb **orig_ccb,
     int *openings, u_int32_t *relsim_flags,
     u_int32_t *timeout, u_int32_t *action, const char **action_string)
 {
+#ifndef __rtems__ 
 	int error;
 
 	switch (ccb->csio.scsi_status) {
@@ -1469,6 +1472,10 @@ camperiphscsistatuserror(union ccb *ccb, union ccb **orig_ccb,
 		break;
 	}
 	return (error);
+#else /* __rtems__ */
+    printk("camperiphscsistatuserror -> shouldn't happen!\n");
+    return 0;
+#endif /* __rtems__ */
 }
 #ifndef __rtems__
 static int
@@ -1837,7 +1844,11 @@ cam_periph_error(union ccb *ccb, cam_flags camflags,
 	else if (sense_flags & SF_NO_PRINT)
 		action &= ~SSQ_PRINT_SENSE;
 	if ((action & SSQ_PRINT_SENSE) != 0)
+#ifndef __rtems__
 		cam_error_print(orig_ccb, CAM_ESF_ALL, CAM_EPF_ALL);
+#else /* __rtems__ */
+        printk("call to cam_error_print supressed->cam_periph_error\n");
+#endif /* __rtems__ */
 	if (error != 0 && (action & SSQ_PRINT_SENSE) != 0) {
 		if (error != ERESTART) {
 			if (action_string == NULL)
@@ -1965,17 +1976,23 @@ cam_periph_devctl_notify(union ccb *ccb)
 		type = "timeout";
 		break;
 	case CAM_SCSI_STATUS_ERROR:
+#ifndef __rtems__
 		sbuf_printf(&sb, "scsi_status=%d ", ccb->csio.scsi_status);
 		if (scsi_extract_sense_ccb(ccb, &serr, &sk, &asc, &ascq))
 			sbuf_printf(&sb, "scsi_sense=\"%02x %02x %02x %02x\" ",
 			    serr, sk, asc, ascq);
+#endif /* __rtems__ */
+        printk("CAM_SCSI_STATUS_ERROR -> shouldn't happen\n");
 		type = "error";
 		break;
 	case CAM_ATA_STATUS_ERROR:
+#ifndef __rtems__
 		sbuf_printf(&sb, "RES=\"");
 		ata_res_sbuf(&ccb->ataio.res, &sb);
 		sbuf_printf(&sb, "\" ");
-		type = "error";
+#endif /* __rtems__ */
+        type = "error";
+        printk("CAM_ATA_STATUS_ERROR -> shouldn't happen\n");
 		break;
 	default:
 		type = "error";
@@ -1984,11 +2001,17 @@ cam_periph_devctl_notify(union ccb *ccb)
 
 	if (ccb->ccb_h.func_code == XPT_SCSI_IO) {
 		sbuf_printf(&sb, "CDB=\"");
+#ifndef __rtems__
 		scsi_cdb_sbuf(scsiio_cdb_ptr(&ccb->csio), &sb);
+#endif /* __rtems__ */
+        printk("XPT_SCSI_IO -> shouldn't happen\n");
 		sbuf_printf(&sb, "\" ");
 	} else if (ccb->ccb_h.func_code == XPT_ATA_IO) {
 		sbuf_printf(&sb, "ACB=\"");
+#ifndef __rtems__
 		ata_cmd_sbuf(&ccb->ataio.cmd, &sb);
+#endif /* __rtems__ */
+        printf("XPT_ATA_IO -> shouldn't happen\n");
 		sbuf_printf(&sb, "\" ");
 	}
 
